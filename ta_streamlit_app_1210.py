@@ -496,12 +496,23 @@ else:
 # ---------- 6. 產生 PDF 報告（Landscape + 簡潔 Normal Plot） ----------
 
 st.subheader("6️⃣ 匯出 PDF 報告")
-st.caption("將目前頁面上的 TA 資訊完整匯出為 PDF 報告（橫向）。")
+st.caption("將目前頁面上的 TA 資訊完整匯出為 PDF 報告（橫向），並自動加上 Sercomm 浮水印。")
 
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
+import base64
+from PIL import Image, ImageFile
+
+# 避免 PNG 有一點點壞掉就直接噴錯
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+# Sercomm logo 的 Base64 字串（去掉 data:image/png;base64, 前綴）
+SERCOMM_LOGO_BASE64 = """
+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
+""".strip()
+
 
 def ascii_only(s: str) -> str:
     """只保留 ASCII 字元（避免中文在某些 PDF viewer 變黑框）"""
@@ -509,7 +520,7 @@ def ascii_only(s: str) -> str:
 
 
 def generate_clean_normal_plot(sigma_stack_val, tol_wc_val):
-    """產生 PDF 報告用的簡潔版 Normal Plot（無灰線、無 sigma 標線）"""
+    """產生 PDF 報告用的簡潔版 Normal Plot，背景透明，讓浮水印可以在後面透出"""
     if sigma_stack_val <= 0 or tol_wc_val == 0:
         return None
 
@@ -526,7 +537,7 @@ def generate_clean_normal_plot(sigma_stack_val, tol_wc_val):
         x_vals,
         y_vals,
         linewidth=1.0,
-        color="#004C99"
+        color="#004C99",
     )
 
     ax2.set_xlabel("Tolerance (mm)", fontsize=8)
@@ -535,13 +546,16 @@ def generate_clean_normal_plot(sigma_stack_val, tol_wc_val):
 
     ax2.spines["top"].set_visible(False)
     ax2.spines["right"].set_visible(False)
-
     ax2.set_ylim(bottom=0)
+
+    # 背景透明
+    fig2.patch.set_alpha(0.0)
+    ax2.set_facecolor("none")
 
     plt.tight_layout()
 
     buf = BytesIO()
-    fig2.savefig(buf, format="png", dpi=160)
+    fig2.savefig(buf, format="png", dpi=160, transparent=True)
     plt.close(fig2)
     buf.seek(0)
     return buf.getvalue()
@@ -561,17 +575,82 @@ def build_pdf_report(
     df_sigma_val,
     rss_factor_data_val,
     ta_loop_image_bytes,
+    sercomm_logo_bytes,
 ) -> BytesIO:
     """建立 PDF 報告（Landscape A4），回傳 BytesIO 物件"""
 
     buffer = BytesIO()
 
-    # ⭐⭐⭐ 這裡改成橫向（Landscape A4） ⭐⭐⭐
+    # 橫向（Landscape A4）
     page_size = landscape(A4)
     c = canvas.Canvas(buffer, pagesize=page_size)
     width, height = page_size
 
+    # 準備 Sercomm logo 圖（只留下藍色字，去掉線，變淡）
+    logo_reader = None
+    if sercomm_logo_bytes:
+        try:
+            img_logo = Image.open(BytesIO(sercomm_logo_bytes)).convert("RGBA")
+            img_logo.load()
+
+            # 利用 HSV 只保留「藍色＋有飽和度」的區域，把灰色斜線全部變透明
+            img_rgb = img_logo.convert("RGB")
+            img_hsv = img_rgb.convert("HSV")
+            h, s, v = img_hsv.split()
+            h_arr = np.array(h, dtype=np.uint8)
+            s_arr = np.array(s, dtype=np.uint8)
+            v_arr = np.array(v, dtype=np.uint8)
+
+            mask = (
+                (s_arr > 60)
+                & (v_arr > 50)
+                & (h_arr >= 120)
+                & (h_arr <= 210)
+            )
+            alpha_arr = np.where(mask, 255, 0).astype("uint8")
+            alpha = Image.fromarray(alpha_arr, mode="L")
+
+            # 變淡：≈ 35% 原圖 + 65% 白色，看起來像半透明
+            white = Image.new("RGB", img_rgb.size, (255, 255, 255))
+            light_rgb = Image.blend(white, img_rgb, 0.35)
+            img_final = Image.merge("RGBA", (*light_rgb.split(), alpha))
+
+            buf_logo = BytesIO()
+            img_final.save(buf_logo, format="PNG")
+            buf_logo.seek(0)
+            logo_reader = ImageReader(buf_logo)
+        except Exception:
+            logo_reader = None
+
+    def draw_watermark():
+        """在當前頁面畫 Sercomm 斜斜、縮小、淡色的浮水印（畫在最底層）"""
+        if not logo_reader:
+            return
+        c.saveState()
+        img_w, img_h = logo_reader.getSize()
+
+        # 寬度大約佔整個頁面的 55%
+        target_w = width * 0.55
+        scale = target_w / float(img_w)
+        draw_w = img_w * scale
+        draw_h = img_h * scale
+
+        c.translate(width / 2.0, height / 2.0)
+        c.rotate(45)
+        c.drawImage(
+            logo_reader,
+            -draw_w / 2.0,
+            -draw_h / 2.0,
+            width=draw_w,
+            height=draw_h,
+            preserveAspectRatio=True,
+            mask="auto",
+        )
+        c.restoreState()
+
     # ========== Page 1: 封面 + TA Loop ==========
+    draw_watermark()  # 先畫浮水印，再畫內容 → 內容不會被遮住
+
     y = height - 15 * mm
 
     c.setFont("Helvetica-Bold", 18)
@@ -601,7 +680,7 @@ def build_pdf_report(
             c.drawString(20 * mm, y, "TA Loop")
             y -= 6 * mm
 
-            img_x = 20 * mm   # 靠左排版
+            img_x = 20 * mm
             c.drawImage(
                 img,
                 img_x,
@@ -620,6 +699,8 @@ def build_pdf_report(
     c.showPage()
 
     # ========== Page 2: 1. Tolerance Setting + 2. Stack Up ==========
+    draw_watermark()
+
     y = height - 15 * mm
     c.setFont("Helvetica-Bold", 14)
     c.drawString(20 * mm, y, "1. Tolerance Setting")
@@ -637,6 +718,7 @@ def build_pdf_report(
     def new_page_tolerance(cont_title: str):
         nonlocal y
         c.showPage()
+        draw_watermark()
         y = height - 15 * mm
         c.setFont("Helvetica-Bold", 14)
         c.drawString(20 * mm, y, cont_title)
@@ -656,13 +738,13 @@ def build_pdf_report(
         label = ascii_only(row.get("公差路徑代號", ""))
         path = ascii_only(row.get("公差路徑 (Tolerance Loop)", ""))
         dim = "" if pd.isna(row.get("Dimension (mm)")) else f"{row['Dimension (mm)']:.3f}"
-        tol = "" if pd.isna(row.get("公差(±T)")) else f"{row['公差(±T)']:.3f}"
+        tol_val = "" if pd.isna(row.get("公差(±T)")) else f"{row['公差(±T)']:.3f}"
         cpk_v = "" if pd.isna(row.get("CPK")) else f"{row['CPK']:.2f}"
 
         c.drawString(20 * mm, y, label)
         c.drawString(35 * mm, y, path[:60])
         c.drawString(110 * mm, y, dim)
-        c.drawString(135 * mm, y, tol)
+        c.drawString(135 * mm, y, tol_val)
         c.drawString(155 * mm, y, cpk_v)
         y -= 5 * mm
 
@@ -671,6 +753,7 @@ def build_pdf_report(
     # ========== 2. Tolerance stack up (WC & RSS) ==========
     if y < 50 * mm:
         c.showPage()
+        draw_watermark()
         y = height - 15 * mm
 
     c.setFont("Helvetica-Bold", 14)
@@ -699,7 +782,7 @@ def build_pdf_report(
 
     y -= 6 * mm
 
-    # ⭐ xRSS sweep table（含 Defect Rate PPM）
+    # xRSS sweep table（含 Defect Rate PPM）
     c.setFont("Helvetica-Bold", 9)
     c.drawString(20 * mm, y, "xRSS")
     c.drawString(40 * mm, y, "Tol (mm)")
@@ -713,6 +796,7 @@ def build_pdf_report(
     while factor <= 1.5001 + 1e-9:
         if y < 25 * mm:
             c.showPage()
+            draw_watermark()
             y = height - 15 * mm
             c.setFont("Helvetica-Bold", 14)
             c.drawString(20 * mm, y, "2. Tolerance stack up (Worst case & RSS) (cont.)")
@@ -747,6 +831,8 @@ def build_pdf_report(
     c.showPage()
 
     # ========== Page 3: Six sigma + Normal Plot ==========
+    draw_watermark()
+
     y = height - 15 * mm
     c.setFont("Helvetica-Bold", 14)
     c.drawString(20 * mm, y, "3. Tolerance stack up (Six sigma)")
@@ -765,6 +851,7 @@ def build_pdf_report(
         for _, row in df_sigma_val.iterrows():
             if y < 55 * mm:
                 c.showPage()
+                draw_watermark()
                 y = height - 15 * mm
                 c.setFont("Helvetica-Bold", 14)
                 c.drawString(20 * mm, y, "3. Tolerance stack up (Six sigma) (cont.)")
@@ -796,8 +883,10 @@ def build_pdf_report(
             y -= 5 * mm
 
     # Normal Plot（簡潔版）
+    # Normal Plot（簡潔版）
     if y < 70 * mm:
         c.showPage()
+        draw_watermark()
         y = height - 15 * mm
         c.setFont("Helvetica-Bold", 14)
         c.drawString(20 * mm, y, "3. Tolerance stack up (Six sigma) (Normal Plot)")
@@ -812,9 +901,18 @@ def build_pdf_report(
     if normal_plot_bytes is not None:
         img_np = ImageReader(BytesIO(normal_plot_bytes))
         img_w, img_h = img_np.getSize()
+
+        # 可用寬度：左右各留 20 mm
         max_w = width - 40 * mm
-        max_h = height - 40 * mm
-        scale = min(max_w / img_w, max_h / img_h)
+        # 可用高度：用「剩餘的 y」再預留 20 mm 下邊界，避免頂到底
+        available_h = max(40 * mm, y - 20 * mm)
+
+        # 依寬度 / 高度兩邊的限制計算「能塞進去的最大縮放倍率」
+        base_scale = min(max_w / img_w, available_h / img_h)
+
+        # 直接用最大倍率 → 自動放到版面可容納的最大尺寸
+        scale = base_scale
+
         draw_w = img_w * scale
         draw_h = img_h * scale
         img_x = (width - draw_w) / 2.0
@@ -830,13 +928,23 @@ def build_pdf_report(
             mask="auto",
         )
 
-    c.showPage()
+    # 最後一頁不用再 showPage，直接存檔
     c.save()
     buffer.seek(0)
     return buffer
 
 
 ta_loop_bytes = ta_loop_image.getvalue() if ta_loop_image is not None else None
+
+# 讀 Sercomm logo 圖檔（優先使用 sercomm_logo.png，讀不到再用 Base64）
+try:
+    with open("sercomm_logo.png", "rb") as f:
+        sercomm_logo_bytes = f.read()
+except Exception:
+    try:
+        sercomm_logo_bytes = base64.b64decode(SERCOMM_LOGO_BASE64)
+    except Exception:
+        sercomm_logo_bytes = None
 
 if not df_calc.empty:
     pdf_buffer = build_pdf_report(
@@ -853,6 +961,7 @@ if not df_calc.empty:
         df_sigma_val=df_sigma,
         rss_factor_data_val=rss_factor_data,
         ta_loop_image_bytes=ta_loop_bytes,
+        sercomm_logo_bytes=sercomm_logo_bytes,
     )
 
     if title and title.strip():
@@ -869,8 +978,11 @@ if not df_calc.empty:
         use_container_width=True,
     )
 
+
+
 st.markdown("---")
 st.caption(
+    
     """
 使用方式：
 • 在上方輸入 Project / Engineer / Title。
