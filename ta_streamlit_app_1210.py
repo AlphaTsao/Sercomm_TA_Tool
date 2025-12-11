@@ -627,12 +627,15 @@ def build_pdf_report(
                 & (h_arr >= 120)
                 & (h_arr <= 210)
             )
-            alpha_arr = np.where(mask, 255, 0).astype("uint8")
+
+            # 讓浮水印「真的」半透明：alpha 降低到 0~255 中的大約 60
+            alpha_value = 100  # 想更淡可以改成 40, 30
+            alpha_arr = np.where(mask, alpha_value, 0).astype("uint8")
             alpha = Image.fromarray(alpha_arr, mode="L")
 
-            # 整體變淡（≈ 35% 原色，看起來像半透明）
+            # 顏色保持很淡（≈ 18% 原色），配合低 alpha 看起來就很輕
             white = Image.new("RGB", img_rgb.size, (255, 255, 255))
-            light_rgb = Image.blend(white, img_rgb, 0.35)
+            light_rgb = Image.blend(white, img_rgb, 0.18)
             img_final = Image.merge("RGBA", (*light_rgb.split(), alpha))
 
             buf_logo = BytesIO()
@@ -643,7 +646,7 @@ def build_pdf_report(
             logo_reader = None
 
     def draw_watermark():
-        """在當前頁面畫 Sercomm 浮水印（置中、45° 旋轉、放在最底層）"""
+        """在當前頁面畫 Sercomm 浮水印（置中、45° 旋轉）"""
         if not logo_reader:
             return
         c.saveState()
@@ -668,8 +671,7 @@ def build_pdf_report(
         c.restoreState()
 
     # =================== Page 1: 封面 + TA Loop ===================
-    draw_watermark()
-
+    # 先畫標題 / 資訊 / TA Loop，最後再疊浮水印在上層
     y = height - 15 * mm
 
     c.setFont("Helvetica-Bold", 18)
@@ -715,6 +717,8 @@ def build_pdf_report(
             c.drawString(20 * mm, y, "[TA Loop image error]")
             y -= 8 * mm
 
+    # Page 1：最後才畫浮水印，確保不會被 TA Loop 蓋掉
+    draw_watermark()
     c.showPage()
 
     # =================== Page 2: Tolerance Setting ===================
